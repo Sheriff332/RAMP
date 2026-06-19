@@ -1,8 +1,8 @@
 // src/storage/metadata.rs
-use std::path::Path;
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
+use std::path::{Path, PathBuf};
 
 pub struct TrackMetadata {
     pub title: String,
@@ -27,12 +27,18 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
     let sample_rate = props.sample_rate().map(|s| s as i64);
 
     // Grab standard metadata tags
-    let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+    let tag = tagged_file
+        .primary_tag()
+        .or_else(|| tagged_file.first_tag());
 
     let (title, artist, album, genre, year, track_number, disc_number) = match tag {
         Some(t) => (
-            t.title().map(|s| s.to_string()).unwrap_or_else(|| "Unknown Title".to_string()),
-            t.artist().map(|s| s.to_string()).unwrap_or_else(|| "Unknown Artist".to_string()),
+            t.title()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "Unknown Title".to_string()),
+            t.artist()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "Unknown Artist".to_string()),
             t.album().map(|s| s.to_string()),
             t.genre().map(|s| s.to_string()),
             t.date().map(|timestamp| timestamp.year as i64),
@@ -41,24 +47,42 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
             t.disk().map(|d| d as i64),
         ),
         None => (
-            path.file_stem().unwrap_or_default().to_string_lossy().to_string(),
+            path.file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
             "Unknown Artist".to_string(),
-            None, None, None, None, None,
+            None,
+            None,
+            None,
+            None,
+            None,
         ),
     };
 
     Ok(TrackMetadata {
-        title, artist, album, duration, bitrate, sample_rate, genre, year, track_number, disc_number
+        title,
+        artist,
+        album,
+        duration,
+        bitrate,
+        sample_rate,
+        genre,
+        year,
+        track_number,
+        disc_number,
     })
 }
 
+use rusqlite::{Transaction, params};
 
-use rusqlite::{params, Transaction, Result as SqlResult};
-
-pub fn sql_populate(tx: &Transaction, path: &Path, meta: TrackMetadata) -> SqlResult<()> {
+pub fn sql_populate(
+    tx: &Transaction,
+    path: &Path,
+    meta: TrackMetadata,
+) -> Result<(), rusqlite::Error> {
     let path_str = path.to_string_lossy().to_string();
 
-    // 1. Guard check (Use 'tx' instead of 'conn')
     let mut stmt = tx.prepare("SELECT 1 FROM track_sources WHERE Path = ?1")?;
     if stmt.exists(params![path_str])? {
         return Ok(());
@@ -70,7 +94,10 @@ pub fn sql_populate(tx: &Transaction, path: &Path, meta: TrackMetadata) -> SqlRe
     let artist_id: i64 = if let Some(row) = rows.next()? {
         row.get(0)?
     } else {
-        tx.execute("INSERT INTO artists (ArtistName) VALUES (?1)", params![meta.artist])?;
+        tx.execute(
+            "INSERT INTO artists (ArtistName) VALUES (?1)",
+            params![meta.artist],
+        )?;
         tx.last_insert_rowid()
     };
 
@@ -101,12 +128,21 @@ pub fn sql_populate(tx: &Transaction, path: &Path, meta: TrackMetadata) -> SqlRe
     let track_id = tx.last_insert_rowid();
 
     // 5. Populate intermediate join tables
-    tx.execute("INSERT INTO track_artists (TrackId, ArtistId) VALUES (?1, ?2)", params![track_id, artist_id])?;
+    tx.execute(
+        "INSERT INTO track_artists (TrackId, ArtistId) VALUES (?1, ?2)",
+        params![track_id, artist_id],
+    )?;
 
     if let Some(c_id) = collection_id {
         let position = meta.track_number.unwrap_or(0);
-        tx.execute("INSERT INTO collection_tracks (CollectionId, TrackId, Position) VALUES (?1, ?2, ?3)", params![c_id, track_id, position])?;
-        tx.execute("INSERT OR IGNORE INTO collection_artists (CollectionId, ArtistId) VALUES (?1, ?2)", params![c_id, artist_id])?;
+        tx.execute(
+            "INSERT INTO collection_tracks (CollectionId, TrackId, Position) VALUES (?1, ?2, ?3)",
+            params![c_id, track_id, position],
+        )?;
+        tx.execute(
+            "INSERT OR IGNORE INTO collection_artists (CollectionId, ArtistId) VALUES (?1, ?2)",
+            params![c_id, artist_id],
+        )?;
     }
 
     // 6. Link back to source
@@ -115,8 +151,34 @@ pub fn sql_populate(tx: &Transaction, path: &Path, meta: TrackMetadata) -> SqlRe
         params![track_id, path_str],
     )?;
 
-    // NOTE: Do NOT call tx.commit() inside here anymore! 
-    // The caller function driving the loop will commit it once everything finishes.
+    Ok(())
+}
+
+pub fn sql_validate(tx: &Transaction, paths: Vec<PathBuf>) -> Result<(), rusqlite::Error> {
+    let placeholders = paths.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+    let delete_sources_sql = format!(
+        "DELETE FROM track_sources WHERE Path NOT IN ({})",
+        placeholders
+    );
+
+    let path_strs = paths.iter().filter_map(|p| p.to_str());
+
+    tx.prepare(&delete_sources_sql)?
+        .execute(rusqlite::params_from_iter(path_strs))?;
+
+    tx.execute(
+        "DELETE FROM tracks
+         WHERE TrackId NOT IN (SELECT DISTINCT TrackId FROM track_sources)",
+        [],
+    )?;
+
+    tx.execute(
+        "DELETE FROM collections
+         WHERE CollectionType = 'album'
+         AND CollectionId NOT IN (SELECT DISTINCT CollectionId FROM collection_tracks)",
+        [],
+    )?;
 
     Ok(())
 }
