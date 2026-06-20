@@ -8,7 +8,7 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     let conn = Connection::open("core.sqlite")?;
 
     conn.execute("PRAGMA foreign_keys = ON", params![])?;
-    conn.execute("PRAGMA journal_mode = WAL", params![])?;
+    conn.pragma_update(None, "journal_mode", &"WAL")?;
     conn.execute("PRAGMA synchronous = NORMAL", params![])?;
 
     conn.execute(

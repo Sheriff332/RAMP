@@ -88,20 +88,7 @@ pub fn sql_populate(
         return Ok(());
     }
 
-    // 2. Resolve/Insert Artist
-    let mut stmt = tx.prepare("SELECT ArtistId FROM artists WHERE ArtistName = ?1")?;
-    let mut rows = stmt.query(params![meta.artist])?;
-    let artist_id: i64 = if let Some(row) = rows.next()? {
-        row.get(0)?
-    } else {
-        tx.execute(
-            "INSERT INTO artists (ArtistName) VALUES (?1)",
-            params![meta.artist],
-        )?;
-        tx.last_insert_rowid()
-    };
-
-    // 3. Resolve/Insert Collection (Album)
+    //Resolve/Insert Collection
     let mut collection_id: Option<i64> = None;
     if let Some(album_title) = meta.album {
         let mut stmt = tx.prepare("SELECT CollectionId FROM collections WHERE CollectionTitle = ?1 AND CollectionType = 'album'")?;
@@ -119,7 +106,7 @@ pub fn sql_populate(
         collection_id = Some(c_id);
     }
 
-    // 4. Insert Track
+    //Insert Track
     tx.execute(
         "INSERT INTO tracks (TrackTitle, Duration, TrackNumber, DiscNumber, Bitrate, SampleRate, Genre, Year, Created, Updated) \
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
@@ -127,11 +114,39 @@ pub fn sql_populate(
     )?;
     let track_id = tx.last_insert_rowid();
 
-    // 5. Populate intermediate join tables
-    tx.execute(
-        "INSERT INTO track_artists (TrackId, ArtistId) VALUES (?1, ?2)",
-        params![track_id, artist_id],
-    )?;
+    let artists: Vec<String> = meta
+        .artist
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
+
+    for artist in artists {
+        //Resolve/Insert Artist
+        let mut stmt = tx.prepare("SELECT ArtistId FROM artists WHERE ArtistName = ?1")?;
+        let mut rows = stmt.query(params![artist])?;
+        let artist_id: i64 = if let Some(row) = rows.next()? {
+            row.get(0)?
+        } else {
+            tx.execute(
+                "INSERT INTO artists (ArtistName) VALUES (?1)",
+                params![artist],
+            )?;
+            tx.last_insert_rowid()
+        };
+
+        //Populate intermediate join tables
+        tx.execute(
+            "INSERT INTO track_artists (TrackId, ArtistId) VALUES (?1, ?2)",
+            params![track_id, artist_id],
+        )?;
+
+        if let Some(c_id) = collection_id {
+            tx.execute(
+                "INSERT OR IGNORE INTO collection_artists (CollectionId, ArtistId) VALUES (?1, ?2)",
+                params![c_id, artist_id],
+            )?;
+        }
+    }
 
     if let Some(c_id) = collection_id {
         let position = meta.track_number.unwrap_or(0);
@@ -139,13 +154,9 @@ pub fn sql_populate(
             "INSERT INTO collection_tracks (CollectionId, TrackId, Position) VALUES (?1, ?2, ?3)",
             params![c_id, track_id, position],
         )?;
-        tx.execute(
-            "INSERT OR IGNORE INTO collection_artists (CollectionId, ArtistId) VALUES (?1, ?2)",
-            params![c_id, artist_id],
-        )?;
     }
 
-    // 6. Link back to source
+    //Link back to source
     tx.execute(
         "INSERT INTO track_sources (TrackId, Source, Path, SourceIdentifier) VALUES (?1, 'local', ?2, 'local_file')",
         params![track_id, path_str],
