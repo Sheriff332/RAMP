@@ -16,8 +16,16 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Install SQLite and Font dependencies
-      run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config libfontconfig1-dev
+    - name: Install SQLite, Font, Audio, and Windowing dependencies
+      run: |
+        sudo apt-get update && sudo apt-get install -y \
+          libsqlite3-dev \
+          pkg-config \
+          libfontconfig1-dev \
+          libasound2-dev \
+          libwayland-dev \
+          libxkbcommon-dev \
+          libx11-dev
     - name: Build
       run: cargo build --verbose 
     - name: Run tests
