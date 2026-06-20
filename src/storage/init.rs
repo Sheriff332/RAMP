@@ -16,8 +16,6 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     TrackId INTEGER PRIMARY KEY, \
     TrackTitle TEXT NOT NULL, \
     Duration INTEGER NOT NULL, \
-    TrackNumber INTEGER, \
-    DiscNumber INTEGER DEFAULT 1, \
     Bitrate INTEGER, \
     SampleRate INTEGER, \
     Genre TEXT, \
@@ -68,6 +66,7 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     CollectionId INTEGER NOT NULL, \
     TrackId INTEGER NOT NULL, \
     Position INTEGER NOT NULL, \
+    DiscNumber INTEGER NOT NULL, \
     FOREIGN KEY (TrackId) REFERENCES tracks(TrackId) ON DELETE CASCADE, \
     FOREIGN KEY (CollectionId) REFERENCES collections(CollectionId) ON DELETE CASCADE)
     ",

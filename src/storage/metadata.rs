@@ -108,9 +108,9 @@ pub fn sql_populate(
 
     //Insert Track
     tx.execute(
-        "INSERT INTO tracks (TrackTitle, Duration, TrackNumber, DiscNumber, Bitrate, SampleRate, Genre, Year, Created, Updated) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
-        params![meta.title, meta.duration, meta.track_number, meta.disc_number.unwrap_or(1), meta.bitrate, meta.sample_rate, meta.genre, meta.year],
+        "INSERT INTO tracks (TrackTitle, Duration, Bitrate, SampleRate, Genre, Year, Created, Updated) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
+        params![meta.title, meta.duration, meta.bitrate, meta.sample_rate, meta.genre, meta.year],
     )?;
     let track_id = tx.last_insert_rowid();
 
@@ -150,9 +150,10 @@ pub fn sql_populate(
 
     if let Some(c_id) = collection_id {
         let position = meta.track_number.unwrap_or(0);
+        let disc_number = meta.disc_number.unwrap_or(1);
         tx.execute(
-            "INSERT INTO collection_tracks (CollectionId, TrackId, Position) VALUES (?1, ?2, ?3)",
-            params![c_id, track_id, position],
+            "INSERT INTO collection_tracks (CollectionId, TrackId, Position, DiscNumber) VALUES (?1, ?2, ?3, ?4)",
+            params![c_id, track_id, position, disc_number],
         )?;
     }
 
