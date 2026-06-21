@@ -15,8 +15,8 @@ use std::io as std_io;
 use std::io::Write;
 
 fn main() {
-    storage::init::sql_init().expect("Could not initialize database");
-    storage::init::init_library_sync().expect("Could not initialize library");
+    storage::core::init::sql_init().expect("Could not initialize database");
+    storage::core::init::init_library_sync().expect("Could not initialize library");
 
     println!("========================");
     println!("  RAMP (HEADLESS MODE) ");

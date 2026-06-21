@@ -1,5 +1,5 @@
 use crate::storage;
-use crate::storage::env::{MUSIC_DIR, VALID_EXTENSIONS};
+use crate::storage::core::env::{MUSIC_DIR, VALID_EXTENSIONS};
 use rusqlite::{Connection, params};
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -16,9 +16,6 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     TrackId INTEGER PRIMARY KEY, \
     TrackTitle TEXT NOT NULL, \
     Duration INTEGER NOT NULL, \
-    Bitrate INTEGER, \
-    SampleRate INTEGER, \
-    Genre TEXT, \
     Year INTEGER, \
     Created DATETIME NOT NULL, \
     Updated DATETIME NOT NULL)
@@ -92,6 +89,7 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     )",
         params![],
     )?;
+    // SourceIdentifier: link to a song of Source etc., like SourceIdentifier = dQw4w9WtXcQ
 
     Ok(())
 }
@@ -113,16 +111,16 @@ pub fn init_library_sync() -> Result<(), rusqlite::Error> {
                 if VALID_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
                     println!("\n--- Found valid track: {:?} ---", path);
 
-                    let metadata =
-                        storage::metadata::fetch_metadata(path).expect("Failed to fetch metadata");
+                    let metadata = storage::core::metadata::fetch_metadata(path)
+                        .expect("Failed to fetch metadata");
 
-                    storage::metadata::sql_populate(&tx, path, metadata)?;
+                    storage::core::metadata::sql_populate(&tx, path, metadata)?;
                 }
             }
         }
     }
 
-    storage::metadata::sql_validate(&tx, paths)?;
+    storage::core::metadata::sql_validate(&tx, paths)?;
 
     tx.commit()?;
     Ok(())

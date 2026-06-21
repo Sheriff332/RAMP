@@ -9,9 +9,6 @@ pub struct TrackMetadata {
     pub artist: String,
     pub album: Option<String>,
     pub duration: i64,
-    pub bitrate: Option<i64>,
-    pub sample_rate: Option<i64>,
-    pub genre: Option<String>,
     pub year: Option<i64>,
     pub track_number: Option<i64>,
     pub disc_number: Option<i64>,
@@ -23,15 +20,13 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
     // Grab technical properties
     let props = tagged_file.properties();
     let duration = props.duration().as_secs() as i64;
-    let bitrate = props.audio_bitrate().map(|b| b as i64);
-    let sample_rate = props.sample_rate().map(|s| s as i64);
 
     // Grab standard metadata tags
     let tag = tagged_file
         .primary_tag()
         .or_else(|| tagged_file.first_tag());
 
-    let (title, artist, album, genre, year, track_number, disc_number) = match tag {
+    let (title, artist, album, year, track_number, disc_number) = match tag {
         Some(t) => (
             t.title()
                 .map(|s| s.to_string())
@@ -40,7 +35,6 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "Unknown Artist".to_string()),
             t.album().map(|s| s.to_string()),
-            t.genre().map(|s| s.to_string()),
             t.date().map(|timestamp| timestamp.year as i64),
             // 2. Trait methods are just .track() and .disk()
             t.track().map(|n| n as i64),
@@ -56,7 +50,6 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
             None,
             None,
             None,
-            None,
         ),
     };
 
@@ -65,9 +58,6 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
         artist,
         album,
         duration,
-        bitrate,
-        sample_rate,
-        genre,
         year,
         track_number,
         disc_number,
@@ -108,9 +98,9 @@ pub fn sql_populate(
 
     //Insert Track
     tx.execute(
-        "INSERT INTO tracks (TrackTitle, Duration, Bitrate, SampleRate, Genre, Year, Created, Updated) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
-        params![meta.title, meta.duration, meta.bitrate, meta.sample_rate, meta.genre, meta.year],
+        "INSERT INTO tracks (TrackTitle, Duration, Year, Created, Updated) \
+         VALUES (?1, ?2, ?3, datetime('now'), datetime('now'))",
+        params![meta.title, meta.duration, meta.year],
     )?;
     let track_id = tx.last_insert_rowid();
 
