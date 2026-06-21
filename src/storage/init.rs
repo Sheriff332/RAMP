@@ -20,7 +20,6 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     SampleRate INTEGER, \
     Genre TEXT, \
     Year INTEGER, \
-    ImagePath TEXT, \
     Created DATETIME NOT NULL, \
     Updated DATETIME NOT NULL)
     ",
@@ -30,8 +29,7 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS artists (\
     ArtistId INTEGER PRIMARY KEY, \
-    ArtistName TEXT NOT NULL, \
-    ImagePath TEXT)
+    ArtistName TEXT NOT NULL)
     ",
         params![],
     )?;
@@ -54,8 +52,7 @@ pub fn sql_init() -> Result<(), rusqlite::Error> {
     CollectionType TEXT NOT NULL, \
     IsUserGenerated INTEGER DEFAULT 0, \
     Created DATETIME NOT NULL, \
-    Updated DATETIME NOT NULL, \
-    ImagePath TEXT)
+    Updated DATETIME NOT NULL)
     ",
         params![],
     )?;
