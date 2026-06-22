@@ -45,12 +45,3 @@ fn main() {
         input_line.clear();
     }
 }
-
-//FIX YOUR DAMN APP
-/*
-split artists properly
-decouple track number and put it in collections position
-look into image rendering
-decouple disc number and... ALSO put it in collections.
-now you can let ppl put discs in ANY collection
-*/
