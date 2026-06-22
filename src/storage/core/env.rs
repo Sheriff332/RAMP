@@ -60,6 +60,15 @@ pub struct CollectionTrack {
     pub disc_number: i64,
 }
 
+#[derive(Debug, Clone)]
+pub enum Metadata {
+    Track(Track),
+    Artist(Artist),
+    Collection(Collection),
+    TrackSource(TrackSource),
+    CollectionTrack(CollectionTrack),
+}
+
 pub struct Queue {
     tracks: Vec<TrackId>,
 }
