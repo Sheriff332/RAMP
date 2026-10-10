@@ -1,80 +1,146 @@
+use diesel::backend::Backend;
+use diesel::deserialize::FromSql;
+use diesel::serialize::{Output, ToSql};
+use diesel::sql_types::BigInt;
+use diesel::sqlite::Sqlite;
+use diesel::{AsExpression, FromSqlRow, Insertable, Queryable, Selectable, deserialize, serialize};
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TrackId(pub i64);
+macro_rules! define_id {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromSqlRow, AsExpression)]
+        #[diesel(sql_type = BigInt)]
+        pub struct $name(pub i64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ArtistId(pub i64);
+        impl FromSql<BigInt, Sqlite> for $name {
+            fn from_sql(bytes: <Sqlite as Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+                let val = <i64 as FromSql<BigInt, Sqlite>>::from_sql(bytes)?;
+                Ok($name(val))
+            }
+        }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CollectionId(pub i64);
+        impl ToSql<BigInt, Sqlite> for $name {
+            fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Sqlite>) -> serialize::Result {
+                <i64 as ToSql<BigInt, Sqlite>>::to_sql(&self.0, out)
+            }
+        }
+    };
+}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TrackSourceId(pub i64);
+define_id!(TrackId);
+define_id!(ArtistId);
+define_id!(CollectionId);
+define_id!(CollectionTrackId);
+define_id!(TrackSourceId);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CollectionTrackId(pub i64);
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Insertable, Queryable, Selectable)]
+#[diesel(table_name = crate::storage::core::schema::tracks)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Track {
-    pub id: TrackId,
-    pub title: String,
+    pub track_id: TrackId,
+    pub track_title: String,
     pub duration: i64,
-    pub year: Option<i64>,
-    pub created: String,
-    pub updated: String,
+    pub year: Option<i32>,
+    pub created: chrono::NaiveDateTime,
+    pub updated: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = crate::storage::core::schema::tracks)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewTrack {
+    pub track_title: String,
+    pub duration: i64,
+    pub year: Option<i32>,
+    pub created: chrono::NaiveDateTime,
+    pub updated: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Insertable, Queryable, Selectable)]
+#[diesel(table_name = crate::storage::core::schema::artists)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Artist {
-    pub id: ArtistId,
-    pub name: String,
+    pub artist_id: ArtistId,
+    pub artist_name: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = crate::storage::core::schema::artists)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewArtist {
+    pub artist_name: String,
+}
+
+#[derive(Debug, Clone, Insertable, Queryable, Selectable)]
+#[diesel(table_name = crate::storage::core::schema::collections)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Collection {
-    pub id: CollectionId,
-    pub title: String,
+    pub collection_id: CollectionId,
+    pub collection_title: String,
     pub collection_type: String,
     pub is_user_generated: bool,
-    pub created: String,
-    pub updated: String,
+    pub created: chrono::NaiveDateTime,
+    pub updated: chrono::NaiveDateTime,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = crate::storage::core::schema::collections)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewCollection {
+    pub collection_title: String,
+    pub collection_type: String,
+    pub is_user_generated: bool,
+    pub created: chrono::NaiveDateTime,
+    pub updated: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Insertable, Queryable, Selectable)]
+#[diesel(table_name = crate::storage::core::schema::collection_tracks)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct CollectionTrack {
+    pub collection_track_id: CollectionTrackId,
+    pub collection_id: CollectionId,
+    pub track_id: TrackId,
+    pub position: i64,
+    pub disc_number: i32,
+}
+
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = crate::storage::core::schema::collection_tracks)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewCollectionTrack {
+    pub collection_id: CollectionId,
+    pub track_id: TrackId,
+    pub position: i64,
+    pub disc_number: i32,
+}
+
+#[derive(Debug, Clone, Insertable, Queryable, Selectable)]
+#[diesel(table_name = crate::storage::core::schema::track_sources)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct TrackSource {
-    pub id: TrackSourceId,
+    pub track_source_id: TrackSourceId,
     pub track_id: TrackId,
     pub source: String,
-    pub path: String,
     pub source_identifier: String,
 }
 
-#[derive(Debug, Clone)]
-pub struct CollectionTrack {
-    pub id: CollectionTrackId,
+#[derive(Debug, Clone, Insertable)]
+#[diesel(table_name = crate::storage::core::schema::track_sources)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewTrackSource {
     pub track_id: TrackId,
-    pub collection_id: CollectionId,
-    pub position: i64,
-    pub disc_number: i64,
+    pub source: String,
+    pub source_identifier: String,
 }
 
-#[derive(Debug, Clone)]
-pub enum Metadata {
-    Track(Track),
-    Artist(Artist),
-    Collection(Collection),
-    TrackSource(TrackSource),
-    CollectionTrack(CollectionTrack),
-}
-
-pub struct Queue {
-    tracks: Vec<TrackId>,
-}
-
-pub struct PlaybackSession {
-    playing: Option<TrackId>,
+#[derive(Debug, Clone, Insertable, Queryable, Selectable)]
+#[diesel(table_name = crate::storage::core::schema::dirs)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct Dirs {
+    pub path: String,
+    pub searching: bool,
 }
 
 pub const VALID_EXTENSIONS: &[&str] = &["mp3", "flac", "m4a", "ogg", "wav", "opus"];
@@ -85,21 +151,3 @@ pub static MUSIC_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     };
     dir
 });
-
-// pub static CACHE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-//     let Some(dir) = dirs::cache_dir() else {
-//         panic!("Failed to find audio directory");
-//     };
-//     dir
-// });
-//
-// pub static RAMP_CACHE_DIR: LazyLock<PathBuf> = LazyLock::new(|| CACHE_DIR.join("RAMP"));
-//
-// pub static THUMBS_DIR: LazyLock<PathBuf> = LazyLock::new(|| RAMP_CACHE_DIR.join("Thumbs"));
-//
-// pub static TRACK_THUMBS_DIR: LazyLock<PathBuf> = LazyLock::new(|| THUMBS_DIR.join("Tracks"));
-//
-// pub static ARTIST_THUMBS_DIR: LazyLock<PathBuf> = LazyLock::new(|| THUMBS_DIR.join("Artists"));
-//
-// pub static COLLECTION_THUMBS_DIR: LazyLock<PathBuf> =
-//     LazyLock::new(|| THUMBS_DIR.join("Collections"));

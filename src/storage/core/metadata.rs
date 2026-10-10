@@ -1,32 +1,48 @@
-// src/storage/metadata.rs
+use crate::storage::core::env::{
+    CollectionId, NewArtist, NewCollection, NewCollectionTrack, NewTrack, NewTrackSource, TrackId,
+    TrackSource,
+};
+use crate::storage::core::schema::artists::dsl as artists;
+use crate::storage::core::schema::collection_artists::dsl as collection_artists;
+use crate::storage::core::schema::collection_tracks::dsl as collection_tracks;
+use crate::storage::core::schema::collections::dsl as collections;
+use crate::storage::core::schema::track_artists::dsl as track_artists;
+use crate::storage::core::schema::track_sources::dsl as track_sources;
+use crate::storage::core::schema::tracks::dsl as tracks;
+use diesel::dsl::{delete, insert_into};
+use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, PooledConnection};
+use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SqliteConnection};
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
 use std::path::{Path, PathBuf};
 
 pub struct TrackMetadata {
-    pub title: String,
-    pub artist: String,
-    pub album: Option<String>,
-    pub duration: i64,
-    pub year: Option<i64>,
-    pub track_number: Option<i64>,
-    pub disc_number: Option<i64>,
+    pub metatitle: String,
+    pub metaartist: String,
+    pub metaalbum: Option<String>,
+    pub metaduration: i64,
+    pub metayear: Option<i32>,
+    pub metatrack_number: Option<i64>,
+    pub metadisc_number: Option<i64>,
 }
 
+//TODO: Unknown Title fix
 pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::Error>> {
     let tagged_file = Probe::open(path)?.guess_file_type()?.read()?;
 
     // Grab technical properties
     let props = tagged_file.properties();
-    let duration = props.duration().as_secs() as i64;
+    let metaduration = props.duration().as_secs() as i64;
 
     // Grab standard metadata tags
     let tag = tagged_file
         .primary_tag()
         .or_else(|| tagged_file.first_tag());
 
-    let (title, artist, album, year, track_number, disc_number) = match tag {
+    let (metatitle, metaartist, metaalbum, metayear, metatrack_number, metadisc_number) = match tag
+    {
         Some(t) => (
             t.title()
                 .map(|s| s.to_string())
@@ -35,8 +51,7 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "Unknown Artist".to_string()),
             t.album().map(|s| s.to_string()),
-            t.date().map(|timestamp| timestamp.year as i64),
-            // 2. Trait methods are just .track() and .disk()
+            t.date().map(|timestamp| timestamp.year as i32),
             t.track().map(|n| n as i64),
             t.disk().map(|d| d as i64),
         ),
@@ -54,133 +69,176 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
     };
 
     Ok(TrackMetadata {
-        title,
-        artist,
-        album,
-        duration,
-        year,
-        track_number,
-        disc_number,
+        metatitle,
+        metaartist,
+        metaalbum,
+        metaduration,
+        metayear,
+        metatrack_number,
+        metadisc_number,
     })
 }
 
-use rusqlite::{Transaction, params};
-
 pub fn sql_populate(
-    tx: &Transaction,
+    conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
     path: &Path,
     meta: TrackMetadata,
-) -> Result<(), rusqlite::Error> {
+) -> Result<(), diesel::result::Error> {
     let path_str = path.to_string_lossy().to_string();
 
-    let mut stmt = tx.prepare("SELECT 1 FROM track_sources WHERE Path = ?1")?;
-    if stmt.exists(params![path_str])? {
+    if track_sources::track_sources
+        .filter(track_sources::source_identifier.eq(&path_str))
+        .first::<TrackSource>(conn)
+        .optional()?
+        .is_some()
+    {
         return Ok(());
     }
 
-    //Resolve/Insert Collection
-    let mut collection_id: Option<i64> = None;
-    if let Some(album_title) = meta.album {
-        let mut stmt = tx.prepare("SELECT CollectionId FROM collections WHERE CollectionTitle = ?1 AND CollectionType = 'album'")?;
-        let mut rows = stmt.query(params![album_title])?;
+    let mut c_id = None;
+    //Collection
+    if let Some(album_title) = meta.metaalbum {
+        let id = collections::collections
+            .filter(collections::collection_title.eq(&album_title))
+            .filter(collections::collection_type.eq("album"))
+            .select(collections::collection_id)
+            .first::<i64>(conn)
+            .optional()?;
 
-        let c_id = if let Some(row) = rows.next()? {
-            row.get(0)?
+        if let Some(id) = id {
+            c_id = Some(id);
         } else {
-            tx.execute(
-                "INSERT INTO collections (CollectionTitle, CollectionType, Created, Updated) VALUES (?1, 'album', datetime('now'), datetime('now'))",
-                params![album_title]
-            )?;
-            tx.last_insert_rowid()
-        };
-        collection_id = Some(c_id);
+            c_id = Some(
+                insert_into(collections::collections)
+                    .values(NewCollection {
+                        collection_title: album_title.to_string(),
+                        collection_type: "album".to_string(),
+                        is_user_generated: false,
+                        created: chrono::Local::now().naive_utc(),
+                        updated: chrono::Local::now().naive_utc(),
+                    })
+                    .returning(collections::collection_id)
+                    .get_result::<i64>(conn)?,
+            );
+        }
     }
 
-    //Insert Track
-    tx.execute(
-        "INSERT INTO tracks (TrackTitle, Duration, Year, Created, Updated) \
-         VALUES (?1, ?2, ?3, datetime('now'), datetime('now'))",
-        params![meta.title, meta.duration, meta.year],
-    )?;
-    let track_id = tx.last_insert_rowid();
+    //Track
+    let t_id = insert_into(tracks::tracks)
+        .values(NewTrack {
+            track_title: meta.metatitle,
+            duration: meta.metaduration,
+            year: meta.metayear,
+            created: chrono::Local::now().naive_utc(),
+            updated: chrono::Local::now().naive_utc(),
+        })
+        .returning(tracks::track_id)
+        .get_result::<i64>(conn)?;
 
-    let artists: Vec<String> = meta
-        .artist
+    //Very primitive checking, might change later... doesn't even support feat. and all
+    //TODO: Improve artist collection
+    let artists_list: Vec<String> = meta
+        .metaartist
         .split(',')
         .map(|s| s.trim().to_string())
         .collect();
 
-    for artist in artists {
-        //Resolve/Insert Artist
-        let mut stmt = tx.prepare("SELECT ArtistId FROM artists WHERE ArtistName = ?1")?;
-        let mut rows = stmt.query(params![artist])?;
-        let artist_id: i64 = if let Some(row) = rows.next()? {
-            row.get(0)?
+    //Artists
+    //track_id is now t_id
+    //artist_id is now a_id
+    for artist in artists_list {
+        let id = artists::artists
+            .filter(artists::artist_name.eq(&artist))
+            .select(artists::artist_id)
+            .first::<i64>(conn)
+            .optional()?;
+        let a_id = if let Some(id) = id {
+            id
         } else {
-            tx.execute(
-                "INSERT INTO artists (ArtistName) VALUES (?1)",
-                params![artist],
-            )?;
-            tx.last_insert_rowid()
+            insert_into(artists::artists)
+                .values(NewArtist {
+                    artist_name: artist,
+                })
+                .returning(artists::artist_id)
+                .get_result::<i64>(conn)?
         };
 
-        //Populate intermediate join tables
-        tx.execute(
-            "INSERT INTO track_artists (TrackId, ArtistId) VALUES (?1, ?2)",
-            params![track_id, artist_id],
-        )?;
+        insert_into(track_artists::track_artists)
+            .values((
+                track_artists::track_id.eq(t_id),
+                track_artists::artist_id.eq(a_id),
+            ))
+            .execute(conn)?;
 
-        if let Some(c_id) = collection_id {
-            tx.execute(
-                "INSERT OR IGNORE INTO collection_artists (CollectionId, ArtistId) VALUES (?1, ?2)",
-                params![c_id, artist_id],
-            )?;
+        if let Some(c_id) = c_id {
+            insert_into(collection_artists::collection_artists)
+                .values((
+                    collection_artists::collection_id.eq(c_id),
+                    collection_artists::artist_id.eq(a_id),
+                ))
+                .execute(conn)?;
         }
     }
 
-    if let Some(c_id) = collection_id {
-        let position = meta.track_number.unwrap_or(0);
-        let disc_number = meta.disc_number.unwrap_or(1);
-        tx.execute(
-            "INSERT INTO collection_tracks (CollectionId, TrackId, Position, DiscNumber) VALUES (?1, ?2, ?3, ?4)",
-            params![c_id, track_id, position, disc_number],
-        )?;
+    if let Some(c_id) = c_id {
+        let position = meta.metatrack_number.unwrap_or(0);
+        let disc_number = meta.metadisc_number.unwrap_or(1) as i32;
+        insert_into(collection_tracks::collection_tracks)
+            .values(NewCollectionTrack {
+                collection_id: CollectionId(c_id),
+                track_id: TrackId(t_id),
+                position,
+                disc_number,
+            })
+            .execute(conn)?;
     }
 
-    //Link back to source
-    tx.execute(
-        "INSERT INTO track_sources (TrackId, Source, Path, SourceIdentifier) VALUES (?1, 'local', ?2, 'local_file')",
-        params![track_id, path_str],
-    )?;
+    //Source
+    insert_into(track_sources::track_sources)
+        .values(NewTrackSource {
+            track_id: TrackId(t_id),
+            source: "local".to_string(),
+            source_identifier: path_str,
+        })
+        .execute(conn)?;
 
     Ok(())
 }
 
-pub fn sql_validate(tx: &Transaction, paths: Vec<PathBuf>) -> Result<(), rusqlite::Error> {
-    let placeholders = paths.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+pub fn sql_validate(
+    conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
+    paths: &[PathBuf],
+) -> Result<(), diesel::result::Error> {
+    delete(
+        track_sources::track_sources.filter(
+            track_sources::source_identifier.ne_all(paths.iter().filter_map(|p| p.to_str())),
+        ),
+    )
+    .execute(conn)?;
 
-    let delete_sources_sql = format!(
-        "DELETE FROM track_sources WHERE Path NOT IN ({})",
-        placeholders
-    );
+    delete(
+        tracks::tracks.filter(
+            tracks::track_id.ne_all(
+                track_sources::track_sources
+                    .distinct()
+                    .select(track_sources::track_id),
+            ),
+        ),
+    )
+    .execute(conn)?;
 
-    let path_strs = paths.iter().filter_map(|p| p.to_str());
-
-    tx.prepare(&delete_sources_sql)?
-        .execute(rusqlite::params_from_iter(path_strs))?;
-
-    tx.execute(
-        "DELETE FROM tracks
-         WHERE TrackId NOT IN (SELECT DISTINCT TrackId FROM track_sources)",
-        [],
-    )?;
-
-    tx.execute(
-        "DELETE FROM collections
-         WHERE CollectionType = 'album'
-         AND CollectionId NOT IN (SELECT DISTINCT CollectionId FROM collection_tracks)",
-        [],
-    )?;
+    delete(
+        collections::collections
+            .filter(collections::collection_type.eq("album"))
+            .filter(
+                collections::collection_id.ne_all(
+                    collection_tracks::collection_tracks
+                        .distinct()
+                        .select(collection_tracks::collection_id),
+                ),
+            ),
+    )
+    .execute(conn)?;
 
     Ok(())
 }

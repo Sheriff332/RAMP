@@ -1,5 +1,5 @@
 pub mod env;
-pub mod getters;
-pub mod init;
+pub mod get;
+pub mod innit;
 pub mod metadata;
-pub mod search;
+pub mod schema;
