@@ -28,6 +28,8 @@ Some dependencies may be under different licenses.
 
 ### Trademarks:
 
-"RAMP", the project logos, and related visual assets are trademarks maintained by the project author. You are free to
+"RAMP", the project logos, the recursive acronym branding (RAMP Ain't Music Player), and related visual assets are
+trademarks maintained by the
+project author. You are free to
 fork, modify, and distribute this codebase under GPL-3.0, but you may not use the "RAMP" brand name or logo to promote
 or advertise derived builds without explicit permission.
