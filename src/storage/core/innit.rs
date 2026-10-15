@@ -115,10 +115,7 @@ use toml_edit::DocumentMut;
 
 pub fn init_conf() -> std::io::Result<()> {
     if !Path::new("config.toml").exists() {
-        let core = format!(
-            "[core]\ndirs = [\"{}\"]\n",
-            MUSIC_DIR.to_string_lossy().to_string()
-        );
+        let core = format!("[core]\ndirs = [\"{}\"]\n", MUSIC_DIR.to_string_lossy());
         fs::write("config.toml", core)?;
         //plan: for features just have a function or variable or smth that satisfies a trait bound
         //and is basically the default configuration for that one
