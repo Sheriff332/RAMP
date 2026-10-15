@@ -171,7 +171,7 @@ pub fn sql_populate(
             .execute(conn)?;
 
         if let Some(c_id) = c_id {
-            insert_into(collection_artists::collection_artists)
+            insert_or_ignore_into(collection_artists::collection_artists)
                 .values((
                     collection_artists::collection_id.eq(c_id),
                     collection_artists::artist_id.eq(a_id),
