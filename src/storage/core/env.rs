@@ -3,7 +3,10 @@ use diesel::deserialize::FromSql;
 use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::BigInt;
 use diesel::sqlite::Sqlite;
-use diesel::{AsExpression, FromSqlRow, Insertable, Queryable, Selectable, deserialize, serialize};
+use diesel::{
+    AsChangeset, AsExpression, FromSqlRow, Insertable, Queryable, Selectable, deserialize,
+    serialize,
+};
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
@@ -54,6 +57,16 @@ pub struct NewTrack {
     pub duration: i64,
     pub year: Option<i32>,
     pub created: chrono::NaiveDateTime,
+    pub updated: chrono::NaiveDateTime,
+}
+
+#[derive(Debug, Clone, AsChangeset)]
+#[diesel(table_name = crate::storage::core::schema::tracks)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct UpdateTrack {
+    pub track_title: String,
+    pub duration: i64,
+    pub year: Option<i32>,
     pub updated: chrono::NaiveDateTime,
 }
 
@@ -136,11 +149,11 @@ pub struct NewTrackSource {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::dirs)]
+#[diesel(table_name = crate::storage::core::schema::env)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct Dirs {
-    pub path: String,
-    pub searching: bool,
+pub struct Env {
+    pub key: String,
+    pub value: String,
 }
 
 pub const VALID_EXTENSIONS: &[&str] = &["mp3", "flac", "m4a", "ogg", "wav", "opus"];

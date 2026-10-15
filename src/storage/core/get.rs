@@ -1,14 +1,24 @@
 use crate::storage::core::env::{
-    Artist, ArtistId, Collection, CollectionId, Track, TrackId,
-    TrackSource,
+    Artist, ArtistId, Collection, CollectionId, Track, TrackId, TrackSource,
 };
 use crate::storage::core::schema::artists::dsl as artists;
 use crate::storage::core::schema::collections::dsl as collections;
+use crate::storage::core::schema::env::dsl as env;
 use crate::storage::core::schema::track_sources::dsl as track_sources;
 use crate::storage::core::schema::tracks::dsl as tracks;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::{QueryDsl, RunQueryDsl, SqliteConnection};
+
+pub fn get_value(
+    key: &str,
+    conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
+) -> QueryResult<String> {
+    env::env
+        .filter(env::key.eq(key))
+        .select(env::value)
+        .first::<String>(conn)
+}
 
 macro_rules! get_id {
     ($get_name:ident, $name_id:ident, $Name:ident, $names:ident, $NameId:ident) => {

@@ -1,6 +1,6 @@
 use crate::storage::core::env::{
     CollectionId, NewArtist, NewCollection, NewCollectionTrack, NewTrack, NewTrackSource, TrackId,
-    TrackSource,
+    UpdateTrack,
 };
 use crate::storage::core::schema::artists::dsl as artists;
 use crate::storage::core::schema::collection_artists::dsl as collection_artists;
@@ -9,10 +9,12 @@ use crate::storage::core::schema::collections::dsl as collections;
 use crate::storage::core::schema::track_artists::dsl as track_artists;
 use crate::storage::core::schema::track_sources::dsl as track_sources;
 use crate::storage::core::schema::tracks::dsl as tracks;
-use diesel::dsl::{delete, insert_into};
+use ahash::AHashSet;
+use chrono::{DateTime, NaiveDateTime, Utc};
+use diesel::dsl::{delete, insert_into, insert_or_ignore_into};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
-use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SqliteConnection};
+use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SqliteConnection, update};
 use lofty::file::{AudioFile, TaggedFileExt};
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
@@ -82,18 +84,43 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
 pub fn sql_populate(
     conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
     path: &Path,
-    meta: TrackMetadata,
 ) -> Result<(), diesel::result::Error> {
     let path_str = path.to_string_lossy().to_string();
 
-    if track_sources::track_sources
+    let mtime = path
+        .metadata()
+        .expect("Could not fetch metadata")
+        .modified()
+        .expect("Could not fetch time");
+    let mtime: NaiveDateTime = DateTime::<Utc>::from(mtime).naive_utc();
+    let existing = track_sources::track_sources
         .filter(track_sources::source_identifier.eq(&path_str))
-        .first::<TrackSource>(conn)
-        .optional()?
-        .is_some()
-    {
+        .select(track_sources::track_id)
+        .first::<TrackId>(conn)
+        .optional()?;
+
+    if let Some(existing) = existing {
+        if tracks::tracks
+            .filter(tracks::track_id.eq(existing))
+            .select(tracks::updated)
+            .first::<NaiveDateTime>(conn)?
+            != mtime
+        {
+            let meta = fetch_metadata(path).expect("Failed to fetch metadata");
+            update(tracks::tracks)
+                .set(UpdateTrack {
+                    track_title: meta.metatitle,
+                    duration: meta.metaduration,
+                    year: meta.metayear,
+                    updated: mtime,
+                })
+                .filter(tracks::track_id.eq(existing))
+                .execute(conn)?;
+        }
         return Ok(());
     }
+
+    let meta = fetch_metadata(path).expect("Failed to fetch metadata");
 
     let mut c_id = None;
     //Collection
@@ -207,7 +234,7 @@ pub fn sql_populate(
 
 pub fn sql_validate(
     conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
-    paths: &[PathBuf],
+    paths: &AHashSet<PathBuf>,
 ) -> Result<(), diesel::result::Error> {
     delete(
         track_sources::track_sources.filter(

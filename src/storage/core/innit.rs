@@ -3,7 +3,7 @@ use crate::storage::core::env::{MUSIC_DIR, VALID_EXTENSIONS};
 use diesel::connection::SimpleConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{Connection, RunQueryDsl, SqliteConnection};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 const CREATE_TABLES: &str = "CREATE TABLE IF NOT EXISTS tracks (
@@ -58,10 +58,11 @@ CREATE TABLE IF NOT EXISTS track_sources (
     source_identifier TEXT NOT NULL,
     FOREIGN KEY (track_id) REFERENCES tracks(track_id) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS dirs (
-    path TEXT PRIMARY KEY NOT NULL,
-    searching BOOLEAN NOT NULL DEFAULT 0
-);";
+CREATE TABLE IF NOT EXISTS env (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sources_id ON track_sources(source_identifier);";
 
 pub fn get_connection_pool(url: &str) -> Pool<ConnectionManager<SqliteConnection>> {
     let manager = ConnectionManager::<SqliteConnection>::new(url);
@@ -70,43 +71,57 @@ pub fn get_connection_pool(url: &str) -> Pool<ConnectionManager<SqliteConnection
         .build(manager)
         .expect("Could not build connection pool")
 }
-
+use ahash::AHashSet;
 pub fn init_library(
     mut conn: PooledConnection<ConnectionManager<SqliteConnection>>,
+    conf: &mut DocumentMut,
 ) -> Result<(), diesel::result::Error> {
     diesel::sql_query("PRAGMA journal_mode = WAL;").execute(&mut conn)?;
     diesel::sql_query("PRAGMA busy_timeout = 5000;").execute(&mut conn)?;
     conn.batch_execute(CREATE_TABLES)?;
-    //TODO: init the dirs library if empty
 
-    //TODO: check through all the dirs in the dirs table that are enabled instead of MUSIC_DIR
     conn.transaction(|conn| {
-        let paths: Vec<PathBuf> = WalkDir::new(MUSIC_DIR.as_path())
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .map(|e| e.path().to_path_buf())
-            .collect();
+        if let Some(dirs) = conf["core"]["dirs"].as_array() {
+            let paths: AHashSet<PathBuf> = AHashSet::from_iter(dirs.into_iter().flat_map(|dir| {
+                WalkDir::new(dir.as_str().unwrap())
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .and_then(|s| s.to_str())
+                            .is_some_and(|ext| VALID_EXTENSIONS.contains(&ext))
+                    })
+                    .map(|e| e.path().to_path_buf())
+            }));
 
-        storage::core::metadata::sql_validate(conn, &paths)?;
+            storage::core::metadata::sql_validate(conn, &paths)?;
 
-        for path in paths.iter() {
-            if path.is_file()
-                && let Some(ext) = path.extension().and_then(|s| s.to_str())
-            {
-                // Just check if the extension is in our set (lowercase it to be safe)
-                if VALID_EXTENSIONS.contains(&ext.to_lowercase().as_str()) {
-                    println!("\n--- Found valid track: {:?} ---", path);
-
-                    let metadata = storage::core::metadata::fetch_metadata(path)
-                        .expect("Failed to fetch metadata");
-
-                    storage::core::metadata::sql_populate(conn, path, metadata)?;
-                }
+            for path in &paths {
+                tracing::trace!(?path, "Found valid track");
+                storage::core::metadata::sql_populate(conn, path)?;
             }
         }
 
         Ok::<(), diesel::result::Error>(())
     })?;
 
+    Ok(())
+}
+
+use std::fs;
+use toml_edit::DocumentMut;
+
+pub fn init_conf() -> std::io::Result<()> {
+    if !Path::new("config.toml").exists() {
+        let core = format!(
+            "[core]\ndirs = [\"{}\"]\n",
+            MUSIC_DIR.to_string_lossy().to_string()
+        );
+        fs::write("config.toml", core)?;
+        //plan: for features just have a function or variable or smth that satisfies a trait bound
+        //and is basically the default configuration for that one
+    }
     Ok(())
 }

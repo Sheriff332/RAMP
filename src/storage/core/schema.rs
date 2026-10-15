@@ -65,9 +65,9 @@ table! {
 }
 
 table! {
-    dirs(path) {
-        path -> Text,
-        searching -> Bool,
+    env(key) {
+        key -> Text,
+        value -> Text,
     }
 }
 
@@ -88,5 +88,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     collection_tracks,
     collection_artists,
     track_sources,
-    dirs,
+    env,
 );
