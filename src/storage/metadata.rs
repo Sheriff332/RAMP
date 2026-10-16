@@ -16,13 +16,14 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SqliteConnection, update};
 use lofty::file::{AudioFile, TaggedFileExt};
+use lofty::prelude::ItemKey;
 use lofty::probe::Probe;
 use lofty::tag::Accessor;
 use std::path::{Path, PathBuf};
 
 pub struct TrackMetadata {
     pub metatitle: String,
-    pub metaartist: String,
+    pub metaartists: Vec<String>,
     pub metaalbum: Option<String>,
     pub metaduration: i64,
     pub metayear: Option<i32>,
@@ -43,15 +44,18 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
         .primary_tag()
         .or_else(|| tagged_file.first_tag());
 
-    let (metatitle, metaartist, metaalbum, metayear, metatrack_number, metadisc_number) = match tag
+    let (metatitle, metaartists, metaalbum, metayear, metatrack_number, metadisc_number) = match tag
     {
         Some(t) => (
             t.title()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| "Unknown Title".to_string()),
-            t.artist()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "Unknown Artist".to_string()),
+            // t.artist()
+            //     .map(|s| s.to_string())
+            //     .unwrap_or_else(|| "Unknown Artist".to_string()),
+            t.get_strings(ItemKey::TrackArtists)
+                .map(String::from)
+                .collect::<Vec<_>>(),
             t.album().map(|s| s.to_string()),
             t.date().map(|timestamp| timestamp.year as i32),
             t.track().map(|n| n as i64),
@@ -62,7 +66,7 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_string(),
-            "Unknown Artist".to_string(),
+            vec!["Unknown Artist".to_string()],
             None,
             None,
             None,
@@ -72,7 +76,7 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
 
     Ok(TrackMetadata {
         metatitle,
-        metaartist,
+        metaartists,
         metaalbum,
         metaduration,
         metayear,
@@ -162,18 +166,8 @@ pub fn sql_populate(
         .returning(tracks::track_id)
         .get_result::<i64>(conn)?;
 
-    //Very primitive checking, might change later... doesn't even support feat. and all
-    //TODO: Improve artist collection
-    let artists_list: Vec<String> = meta
-        .metaartist
-        .split(',')
-        .map(|s| s.trim().to_string())
-        .collect();
-
-    //Artists
-    //track_id is now t_id
-    //artist_id is now a_id
-    for artist in artists_list {
+    //may want to inspect this later for bad examples (maybe optional feature)
+    for artist in meta.metaartists {
         let id = artists::artists
             .filter(artists::artist_name.eq(&artist))
             .select(artists::artist_id)
