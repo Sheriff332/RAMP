@@ -31,7 +31,6 @@ pub struct TrackMetadata {
     pub metadisc_number: Option<i64>,
 }
 
-//TODO: Unknown Title fix
 pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::Error>> {
     let tagged_file = Probe::open(path)?.guess_file_type()?.read()?;
 
@@ -47,12 +46,12 @@ pub fn fetch_metadata(path: &Path) -> Result<TrackMetadata, Box<dyn std::error::
     let (metatitle, metaartists, metaalbum, metayear, metatrack_number, metadisc_number) = match tag
     {
         Some(t) => (
-            t.title()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| "Unknown Title".to_string()),
-            // t.artist()
-            //     .map(|s| s.to_string())
-            //     .unwrap_or_else(|| "Unknown Artist".to_string()),
+            t.title().map(|s| s.to_string()).unwrap_or_else(|| {
+                path.file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            }),
             t.get_strings(ItemKey::TrackArtists)
                 .map(String::from)
                 .collect::<Vec<_>>(),
