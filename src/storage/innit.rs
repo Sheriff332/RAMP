@@ -1,5 +1,5 @@
 use crate::storage;
-use crate::storage::core::env::{MUSIC_DIR, VALID_EXTENSIONS};
+use crate::storage::env::{MUSIC_DIR, VALID_EXTENSIONS};
 use diesel::connection::SimpleConnection;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::{Connection, RunQueryDsl, SqliteConnection};
@@ -96,11 +96,11 @@ pub fn init_library(
                     .map(|e| e.path().to_path_buf())
             }));
 
-            storage::core::metadata::sql_validate(conn, &paths)?;
+            storage::metadata::sql_validate(conn, &paths)?;
 
             for path in &paths {
                 tracing::trace!(?path, "Found valid track");
-                storage::core::metadata::sql_populate(conn, path)?;
+                storage::metadata::sql_populate(conn, path)?;
             }
         }
 
@@ -114,9 +114,9 @@ use std::fs;
 use toml_edit::DocumentMut;
 
 pub fn init_conf() -> std::io::Result<()> {
-    if !Path::new("config.toml").exists() {
+    if !Path::new("../../config.toml").exists() {
         let core = format!("[core]\ndirs = [\"{}\"]\n", MUSIC_DIR.to_string_lossy());
-        fs::write("config.toml", core)?;
+        fs::write("../../config.toml", core)?;
         //plan: for features just have a function or variable or smth that satisfies a trait bound
         //and is basically the default configuration for that one
     }

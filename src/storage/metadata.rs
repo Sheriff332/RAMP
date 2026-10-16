@@ -1,14 +1,14 @@
-use crate::storage::core::env::{
+use crate::storage::env::{
     CollectionId, NewArtist, NewCollection, NewCollectionTrack, NewTrack, NewTrackSource, TrackId,
     UpdateTrack,
 };
-use crate::storage::core::schema::artists::dsl as artists;
-use crate::storage::core::schema::collection_artists::dsl as collection_artists;
-use crate::storage::core::schema::collection_tracks::dsl as collection_tracks;
-use crate::storage::core::schema::collections::dsl as collections;
-use crate::storage::core::schema::track_artists::dsl as track_artists;
-use crate::storage::core::schema::track_sources::dsl as track_sources;
-use crate::storage::core::schema::tracks::dsl as tracks;
+use crate::storage::schema::artists::dsl as artists;
+use crate::storage::schema::collection_artists::dsl as collection_artists;
+use crate::storage::schema::collection_tracks::dsl as collection_tracks;
+use crate::storage::schema::collections::dsl as collections;
+use crate::storage::schema::track_artists::dsl as track_artists;
+use crate::storage::schema::track_sources::dsl as track_sources;
+use crate::storage::schema::tracks::dsl as tracks;
 use ahash::AHashSet;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::dsl::{delete, insert_into, insert_or_ignore_into};

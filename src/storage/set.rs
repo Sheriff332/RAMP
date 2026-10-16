@@ -1,4 +1,4 @@
-use crate::storage::core::schema::env::dsl as env;
+use crate::storage::schema::env::dsl as env;
 use diesel::dsl::update;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};

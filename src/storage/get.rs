@@ -1,11 +1,11 @@
-use crate::storage::core::env::{
+use crate::storage::env::{
     Artist, ArtistId, Collection, CollectionId, Track, TrackId, TrackSource,
 };
-use crate::storage::core::schema::artists::dsl as artists;
-use crate::storage::core::schema::collections::dsl as collections;
-use crate::storage::core::schema::env::dsl as env;
-use crate::storage::core::schema::track_sources::dsl as track_sources;
-use crate::storage::core::schema::tracks::dsl as tracks;
+use crate::storage::schema::artists::dsl as artists;
+use crate::storage::schema::collections::dsl as collections;
+use crate::storage::schema::env::dsl as env;
+use crate::storage::schema::track_sources::dsl as track_sources;
+use crate::storage::schema::tracks::dsl as tracks;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::{QueryDsl, RunQueryDsl, SqliteConnection};

@@ -38,7 +38,7 @@ define_id!(CollectionTrackId);
 define_id!(TrackSourceId);
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::tracks)]
+#[diesel(table_name = crate::storage::schema::tracks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Track {
     pub track_id: TrackId,
@@ -50,7 +50,7 @@ pub struct Track {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::core::schema::tracks)]
+#[diesel(table_name = crate::storage::schema::tracks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewTrack {
     pub track_title: String,
@@ -61,7 +61,7 @@ pub struct NewTrack {
 }
 
 #[derive(Debug, Clone, AsChangeset)]
-#[diesel(table_name = crate::storage::core::schema::tracks)]
+#[diesel(table_name = crate::storage::schema::tracks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct UpdateTrack {
     pub track_title: String,
@@ -71,7 +71,7 @@ pub struct UpdateTrack {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::artists)]
+#[diesel(table_name = crate::storage::schema::artists)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Artist {
     pub artist_id: ArtistId,
@@ -79,14 +79,14 @@ pub struct Artist {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::core::schema::artists)]
+#[diesel(table_name = crate::storage::schema::artists)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewArtist {
     pub artist_name: String,
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::collections)]
+#[diesel(table_name = crate::storage::schema::collections)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Collection {
     pub collection_id: CollectionId,
@@ -98,7 +98,7 @@ pub struct Collection {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::core::schema::collections)]
+#[diesel(table_name = crate::storage::schema::collections)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewCollection {
     pub collection_title: String,
@@ -109,7 +109,7 @@ pub struct NewCollection {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::collection_tracks)]
+#[diesel(table_name = crate::storage::schema::collection_tracks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct CollectionTrack {
     pub collection_track_id: CollectionTrackId,
@@ -120,7 +120,7 @@ pub struct CollectionTrack {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::core::schema::collection_tracks)]
+#[diesel(table_name = crate::storage::schema::collection_tracks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewCollectionTrack {
     pub collection_id: CollectionId,
@@ -130,7 +130,7 @@ pub struct NewCollectionTrack {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::track_sources)]
+#[diesel(table_name = crate::storage::schema::track_sources)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct TrackSource {
     pub track_source_id: TrackSourceId,
@@ -140,7 +140,7 @@ pub struct TrackSource {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::core::schema::track_sources)]
+#[diesel(table_name = crate::storage::schema::track_sources)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewTrackSource {
     pub track_id: TrackId,
@@ -149,7 +149,7 @@ pub struct NewTrackSource {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::core::schema::env)]
+#[diesel(table_name = crate::storage::schema::env)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Env {
     pub key: String,

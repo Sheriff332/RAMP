@@ -27,7 +27,7 @@ fn main() {
 
     let span = tracing::info_span!("config");
     let _guard = span.enter();
-    storage::core::innit::init_conf().expect("Failed to initialize config");
+    storage::innit::init_conf().expect("Failed to initialize config");
     let mut conf = std::fs::read_to_string("config.toml")
         .expect("Failed to read config file")
         .parse::<DocumentMut>()
@@ -36,8 +36,8 @@ fn main() {
 
     let span = tracing::info_span!("database");
     let _guard = span.enter();
-    let pool = storage::core::innit::get_connection_pool("ramp.sqlite");
-    storage::core::innit::init_library(
+    let pool = storage::innit::get_connection_pool("ramp.sqlite");
+    storage::innit::init_library(
         pool.get().expect("Failed to get connection from pool"),
         &mut conf,
     )

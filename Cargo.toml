@@ -21,6 +21,12 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 ahash = "0.8.12"
 clap = { version = "4.6.7", features = ["derive"] }
+# RAMP features:
+volume = { path = "features/volume" }
 
 [build-dependencies]
 slint-build = "1.16.1"
+
+[workspace]
+members = ["features/volume"]
+resolver = "3"
