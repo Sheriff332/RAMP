@@ -1,6 +1,7 @@
 use clap::Parser;
 use toml_edit::DocumentMut;
 
+mod features;
 mod io;
 mod logic;
 mod storage;
@@ -33,6 +34,8 @@ fn main() {
         .parse::<DocumentMut>()
         .expect("Failed to parse config file");
     drop(_guard);
+
+    //features init
 
     let span = tracing::info_span!("database");
     let _guard = span.enter();

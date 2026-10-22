@@ -1,9 +1,10 @@
 use diesel::table;
 
 table! {
-    tracks(track_id) {
-        track_id -> BigInt,
-        track_title -> Text,
+    audios(audio_id) {
+        audio_id -> BigInt,
+        audio_title -> Text,
+        audio_type -> Integer,
         duration -> BigInt,
         year -> Nullable<Integer>,
         created -> Timestamp,
@@ -12,16 +13,16 @@ table! {
 }
 
 table! {
-    artists(artist_id) {
-        artist_id -> BigInt,
-        artist_name -> Text,
+    creators(creator_id) {
+        creator_id -> BigInt,
+        creator_name -> Text,
     }
 }
 
 table! {
-    track_artists(track_id, artist_id) {
-        track_id -> BigInt,
-        artist_id -> BigInt,
+    audio_creators(audio_id, creator_id) {
+        audio_id -> BigInt,
+        creator_id -> BigInt,
     }
 }
 
@@ -37,28 +38,28 @@ table! {
 }
 
 table! {
-    collection_tracks(collection_track_id) {
-        collection_track_id -> BigInt,
+    collection_audios(collection_audio_id) {
+        collection_audio_id -> BigInt,
         collection_id -> BigInt,
-        track_id -> BigInt,
+        audio_id -> BigInt,
         position -> BigInt,
-        disc_number -> Integer,
+        subcollection -> Integer,
     }
 }
 
 table! {
-    collection_artists(collection_id, artist_id) {
+    collection_creators(collection_id, creator_id) {
         collection_id -> BigInt,
-        artist_id -> BigInt,
+        creator_id -> BigInt,
         position -> Integer,
         disc_number -> Integer,
     }
 }
 
 table! {
-    track_sources(track_source_id) {
-        track_source_id -> BigInt,
-        track_id -> BigInt,
+    audio_sources(audio_source_id) {
+        audio_source_id -> BigInt,
+        audio_id -> BigInt,
         source -> Text,
         source_identifier -> Text, //URI sorta thing
     }
@@ -72,21 +73,21 @@ table! {
 }
 
 //relations
-diesel::joinable!(track_sources -> tracks (track_id));
-diesel::joinable!(collection_tracks -> collections (collection_id));
-diesel::joinable!(collection_tracks -> tracks (track_id));
-diesel::joinable!(track_artists -> tracks (track_id));
-diesel::joinable!(track_artists -> artists (artist_id));
-diesel::joinable!(collection_artists -> collections (collection_id));
-diesel::joinable!(collection_artists -> artists (artist_id));
+diesel::joinable!(audio_sources -> audios (audio_id));
+diesel::joinable!(collection_audios -> collections (collection_id));
+diesel::joinable!(collection_audios -> audios (audio_id));
+diesel::joinable!(audio_creators -> audios (audio_id));
+diesel::joinable!(audio_creators -> creators (creator_id));
+diesel::joinable!(collection_creators -> collections (collection_id));
+diesel::joinable!(collection_creators -> creators (creator_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    tracks,
-    artists,
-    track_artists,
+    audios,
+    creators,
+    audio_creators,
     collections,
-    collection_tracks,
-    collection_artists,
-    track_sources,
+    collection_audios,
+    collection_creators,
+    audio_sources,
     env,
 );

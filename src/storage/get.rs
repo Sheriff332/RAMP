@@ -1,11 +1,11 @@
 use crate::storage::env::{
-    Artist, ArtistId, Collection, CollectionId, Track, TrackId, TrackSource,
+    Audio, AudioId, AudioSource, Collection, CollectionId, Creator, CreatorId,
 };
-use crate::storage::schema::artists::dsl as artists;
+use crate::storage::schema::audio_sources::dsl as audio_sources;
+use crate::storage::schema::audios::dsl as audios;
 use crate::storage::schema::collections::dsl as collections;
+use crate::storage::schema::creators::dsl as creators;
 use crate::storage::schema::env::dsl as env;
-use crate::storage::schema::track_sources::dsl as track_sources;
-use crate::storage::schema::tracks::dsl as tracks;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::{QueryDsl, RunQueryDsl, SqliteConnection};
@@ -33,8 +33,14 @@ macro_rules! get_id {
     };
 }
 
-get_id!(get_track_from_id, track_id, Track, tracks, TrackId);
-get_id!(get_artist_from_id, artist_id, Artist, artists, ArtistId);
+get_id!(get_audio_from_id, audio_id, Audio, audios, AudioId);
+get_id!(
+    get_creator_from_id,
+    creator_id,
+    Creator,
+    creators,
+    CreatorId
+);
 get_id!(
     get_collection_from_id,
     collection_id,
@@ -42,13 +48,13 @@ get_id!(
     collections,
     CollectionId
 );
-pub fn get_track_source_from_id(
+pub fn get_audio_source_from_id(
     conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
-    id: TrackId,
+    id: AudioId,
     source: String,
-) -> QueryResult<TrackSource> {
-    track_sources::track_sources
-        .filter(track_sources::track_id.eq(id))
-        .filter(track_sources::source.eq(source))
-        .first::<TrackSource>(conn)
+) -> QueryResult<AudioSource> {
+    audio_sources::audio_sources
+        .filter(audio_sources::audio_id.eq(id))
+        .filter(audio_sources::source.eq(source))
+        .first::<AudioSource>(conn)
 }
