@@ -1,10 +1,7 @@
 use clap::Parser;
 use toml_edit::DocumentMut;
 
-mod features;
-mod io;
-mod logic;
-mod storage;
+pub mod options;
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -28,7 +25,7 @@ fn main() {
 
     let span = tracing::info_span!("config");
     let _guard = span.enter();
-    storage::innit::init_conf().expect("Failed to initialize config");
+    options::init_conf().expect("Failed to initialize config");
     let mut conf = std::fs::read_to_string("config.toml")
         .expect("Failed to read config file")
         .parse::<DocumentMut>()
@@ -39,8 +36,8 @@ fn main() {
 
     let span = tracing::info_span!("database");
     let _guard = span.enter();
-    let pool = storage::innit::get_connection_pool("ramp.sqlite");
-    storage::innit::init_library(
+    let pool = sqlitedb::innit::get_connection_pool("ramp.sqlite");
+    sqlitedb::innit::init_library(
         pool.get().expect("Failed to get connection from pool"),
         &mut conf,
     )

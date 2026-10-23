@@ -7,8 +7,6 @@ use diesel::{
     AsChangeset, AsExpression, FromSqlRow, Insertable, Queryable, Selectable, deserialize,
     serialize,
 };
-use std::path::PathBuf;
-use std::sync::LazyLock;
 
 macro_rules! define_id {
     ($name:ident) => {
@@ -66,7 +64,7 @@ define_sqlite_enum!(AudioType {Track=0,Audiobook=1,Podcast=2,Recording=3});
 define_sqlite_enum!(CollectionType {Album=0,Playlist=1});
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::schema::audios)]
+#[diesel(table_name = crate::schema::audios)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Audio {
     pub audio_id: AudioId,
@@ -79,7 +77,7 @@ pub struct Audio {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::schema::audios)]
+#[diesel(table_name = crate::schema::audios)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewAudio {
     pub audio_title: String,
@@ -91,7 +89,7 @@ pub struct NewAudio {
 }
 
 #[derive(Debug, Clone, AsChangeset)]
-#[diesel(table_name = crate::storage::schema::audios)]
+#[diesel(table_name = crate::schema::audios)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct UpdateAudio {
     pub audio_title: String,
@@ -102,7 +100,7 @@ pub struct UpdateAudio {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::schema::creators)]
+#[diesel(table_name = crate::schema::creators)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Creator {
     pub creator_id: CreatorId,
@@ -110,14 +108,14 @@ pub struct Creator {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::schema::creators)]
+#[diesel(table_name = crate::schema::creators)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewCreator {
     pub creator_name: String,
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::schema::collections)]
+#[diesel(table_name = crate::schema::collections)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Collection {
     pub collection_id: CollectionId,
@@ -129,7 +127,7 @@ pub struct Collection {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::schema::collections)]
+#[diesel(table_name = crate::schema::collections)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewCollection {
     pub collection_title: String,
@@ -140,7 +138,7 @@ pub struct NewCollection {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::schema::collection_audios)]
+#[diesel(table_name = crate::schema::collection_audios)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct CollectionAudio {
     pub collection_audio_id: CollectionAudioId,
@@ -151,7 +149,7 @@ pub struct CollectionAudio {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::schema::collection_audios)]
+#[diesel(table_name = crate::schema::collection_audios)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewCollectionAudio {
     pub collection_id: CollectionId,
@@ -161,7 +159,7 @@ pub struct NewCollectionAudio {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::schema::audio_sources)]
+#[diesel(table_name = crate::schema::audio_sources)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct AudioSource {
     pub audio_source_id: AudioSourceId,
@@ -171,7 +169,7 @@ pub struct AudioSource {
 }
 
 #[derive(Debug, Clone, Insertable)]
-#[diesel(table_name = crate::storage::schema::audio_sources)]
+#[diesel(table_name = crate::schema::audio_sources)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NewAudioSource {
     pub audio_id: AudioId,
@@ -180,18 +178,9 @@ pub struct NewAudioSource {
 }
 
 #[derive(Debug, Clone, Insertable, Queryable, Selectable)]
-#[diesel(table_name = crate::storage::schema::env)]
+#[diesel(table_name = crate::schema::env)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Env {
     pub key: String,
     pub value: String,
 }
-
-pub const VALID_EXTENSIONS: &[&str] = &["mp3", "flac", "m4a", "ogg", "wav", "opus"];
-
-pub static MUSIC_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    let Some(dir) = dirs::audio_dir() else {
-        panic!("Failed to find audio directory");
-    };
-    dir
-});

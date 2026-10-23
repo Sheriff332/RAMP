@@ -1,87 +1,141 @@
-use crate::storage::env::{
+use crate::env::{
     AudioId, AudioType, CollectionId, NewAudio, NewAudioSource, NewCollection, NewCollectionAudio,
     NewCreator, UpdateAudio,
 };
-use crate::storage::schema::audio_creators::dsl as audio_creators;
-use crate::storage::schema::audio_sources::dsl as audio_sources;
-use crate::storage::schema::audios::dsl as audios;
-use crate::storage::schema::collection_audios::dsl as collection_audios;
-use crate::storage::schema::collection_creators::dsl as collection_creators;
-use crate::storage::schema::collections::dsl as collections;
-use crate::storage::schema::creators::dsl as creators;
+use crate::schema::audio_creators::dsl as audio_creators;
+use crate::schema::audio_sources::dsl as audio_sources;
+use crate::schema::audios::dsl as audios;
+use crate::schema::collection_audios::dsl as collection_audios;
+use crate::schema::collection_creators::dsl as collection_creators;
+use crate::schema::collections::dsl as collections;
+use crate::schema::creators::dsl as creators;
 use ahash::AHashSet;
 use chrono::{DateTime, NaiveDateTime, Utc};
-use diesel::dsl::{delete, insert_into, insert_or_ignore_into};
+use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, PooledConnection};
-use diesel::{OptionalExtension, QueryDsl, RunQueryDsl, SqliteConnection, update};
-use lofty::file::{AudioFile, TaggedFileExt};
-use lofty::prelude::ItemKey;
-use lofty::probe::Probe;
-use lofty::tag::Accessor;
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
+use diesel::{
+    Connection, ExpressionMethods, RunQueryDsl, SqliteConnection, delete, insert_into,
+    insert_or_ignore_into, update,
+};
+use helpers::metadata::fetch_metadata;
 use std::path::{Path, PathBuf};
+use toml_edit::DocumentMut;
+use walkdir::WalkDir;
 
-pub struct AudioMetadata {
-    pub metatitle: String,
-    pub metacreators: Vec<String>,
-    pub metaalbum: Option<String>,
-    pub metaduration: i64,
-    pub metayear: Option<i32>,
-    pub metaaudio_number: Option<i64>,
-    pub metasubcollection: Option<i64>,
+const CREATE_TABLES: &str = "CREATE TABLE IF NOT EXISTS audios (
+    audio_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    audio_title TEXT NOT NULL,
+    audio_type INTEGER NOT NULL,
+    duration INTEGER NOT NULL,          -- BigInt in SQLite is INTEGER
+    year INTEGER,                       -- Nullable
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS creators (
+    creator_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    creator_name TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audio_creators (
+    audio_id INTEGER NOT NULL,
+    creator_id INTEGER NOT NULL,
+    PRIMARY KEY (audio_id, creator_id),
+    FOREIGN KEY (audio_id) REFERENCES audios(audio_id) ON DELETE CASCADE,
+    FOREIGN KEY (creator_id) REFERENCES creators(creator_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS collections (
+    collection_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    collection_title TEXT NOT NULL,
+    collection_type TEXT NOT NULL,
+    is_user_generated BOOLEAN NOT NULL DEFAULT 0,
+    created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS collection_audios (
+    collection_audio_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    collection_id INTEGER NOT NULL,
+    audio_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    subcollection INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (collection_id) REFERENCES collections(collection_id) ON DELETE CASCADE,
+    FOREIGN KEY (audio_id) REFERENCES audios(audio_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS collection_creators (
+    collection_id INTEGER NOT NULL,
+    creator_id INTEGER NOT NULL,
+    position INTEGER NOT NULL DEFAULT 1,
+    disc_number INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (collection_id, creator_id),
+    FOREIGN KEY (collection_id) REFERENCES collections(collection_id) ON DELETE CASCADE,
+    FOREIGN KEY (creator_id) REFERENCES creators(creator_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS audio_sources (
+    audio_source_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    audio_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    source_identifier TEXT NOT NULL,
+    FOREIGN KEY (audio_id) REFERENCES audios(audio_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS env (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sources_id ON audio_sources(source_identifier);";
+
+pub fn get_connection_pool(url: &str) -> Pool<ConnectionManager<SqliteConnection>> {
+    let manager = ConnectionManager::<SqliteConnection>::new(url);
+    Pool::builder()
+        .test_on_check_out(true)
+        .build(manager)
+        .expect("Could not build connection pool")
 }
 
-pub fn fetch_metadata(path: &Path) -> Result<AudioMetadata, Box<dyn std::error::Error>> {
-    let tagged_file = Probe::open(path)?.guess_file_type()?.read()?;
+pub const VALID_EXTENSIONS: &[&str] = &[
+    "mp3", "m4a", "aac", "ogg", "oga", "opus", //lossy
+    "flac", "wav", "aiff", "aif", //lossless
+    "m4b", "m4r", "wv", "ape", "mp2", "mpc", //niche
+];
+macro_rules! populate_type {
+    ($conf:expr ,$type:expr, $audio_type:expr, $conn:expr) => {
+        if let Some(dirs) = $conf[$type]["dirs"].as_array() {
+            let paths: AHashSet<PathBuf> = AHashSet::from_iter(dirs.into_iter().flat_map(|dir| {
+                WalkDir::new(dir.as_str().unwrap())
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .and_then(|s| s.to_str())
+                            .is_some_and(|ext| VALID_EXTENSIONS.contains(&ext))
+                    })
+                    .map(|e| e.path().to_path_buf())
+            }));
 
-    // Grab technical properties
-    let props = tagged_file.properties();
-    let metaduration = props.duration().as_secs() as i64;
+            sql_validate($conn, &paths)?;
 
-    // Grab standard metadata tags
-    let tag = tagged_file
-        .primary_tag()
-        .or_else(|| tagged_file.first_tag());
+            for path in &paths {
+                tracing::trace!(?path, "Found valid audio");
+                sql_populate($conn, path, $audio_type)?;
+            }
+        }
+    };
+}
+pub fn init_library(
+    mut conn: PooledConnection<ConnectionManager<SqliteConnection>>,
+    conf: &mut DocumentMut,
+) -> Result<(), diesel::result::Error> {
+    diesel::sql_query("PRAGMA journal_mode = WAL;").execute(&mut conn)?;
+    diesel::sql_query("PRAGMA busy_timeout = 5000;").execute(&mut conn)?;
+    conn.batch_execute(CREATE_TABLES)?;
 
-    let (metatitle, metacreators, metaalbum, metayear, metaaudio_number, metasubcollection) =
-        match tag {
-            Some(t) => (
-                t.title().map(|s| s.to_string()).unwrap_or_else(|| {
-                    path.file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string()
-                }),
-                t.get_strings(ItemKey::TrackArtists)
-                    .map(String::from)
-                    .collect::<Vec<_>>(),
-                t.album().map(|s| s.to_string()),
-                t.date().map(|timestamp| timestamp.year as i32),
-                t.track().map(|n| n as i64),
-                t.disk().map(|d| d as i64),
-            ),
-            None => (
-                path.file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string(),
-                vec!["Unknown Creator".to_string()],
-                None,
-                None,
-                None,
-                None,
-            ),
-        };
+    conn.transaction(|conn| {
+        populate_type!(conf, "music", AudioType::Track, conn);
 
-    Ok(AudioMetadata {
-        metatitle,
-        metacreators,
-        metaalbum,
-        metaduration,
-        metayear,
-        metaaudio_number,
-        metasubcollection,
-    })
+        Ok::<(), diesel::result::Error>(())
+    })?;
+
+    Ok(())
 }
 
 pub fn sql_populate(

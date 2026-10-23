@@ -1,11 +1,9 @@
-use crate::storage::env::{
-    Audio, AudioId, AudioSource, Collection, CollectionId, Creator, CreatorId,
-};
-use crate::storage::schema::audio_sources::dsl as audio_sources;
-use crate::storage::schema::audios::dsl as audios;
-use crate::storage::schema::collections::dsl as collections;
-use crate::storage::schema::creators::dsl as creators;
-use crate::storage::schema::env::dsl as env;
+use crate::env::{Audio, AudioId, AudioSource, Collection, CollectionId, Creator, CreatorId};
+use crate::schema::audio_sources::dsl as audio_sources;
+use crate::schema::audios::dsl as audios;
+use crate::schema::collections::dsl as collections;
+use crate::schema::creators::dsl as creators;
+use crate::schema::env::dsl as env;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::{QueryDsl, RunQueryDsl, SqliteConnection};

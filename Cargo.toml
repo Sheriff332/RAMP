@@ -1,10 +1,27 @@
-[package]
-name = "RAMP"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+members = [
+    "crates/app",
+    "crates/defs",
+    "crates/features/*",
+    "crates/helpers",
+    "crates/slintui",
+    "crates/sqlitedb",
+]
+resolver = "3"
 
-[dependencies]
-slint = "1.18.1"
+[workspace.dependencies]
+tokio = { version = "1.54.1", features = ["full"] }
+slint = { version = "1.18.1", default-features = false, features = [
+    "std",
+    "compat-1-18",
+    "backend-winit",
+    "renderer-femtovg",
+    "renderer-software", # fallback
+] }
+slint-interpreter = "1.18.1"
+serde = "1.0.229"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 diesel = { version = "2.3.12", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35", "r2d2"] }
 # build libsqlite3 as part of the build process
 # uncomment this line if you run into setup issues
@@ -16,11 +33,13 @@ dirs = "7.0.0"
 walkdir = "2.5.0"
 chrono = "0.4.45"
 toml_edit = { version = "0.25.17", features = ["display", "parse", "serde", "unbounded"] }
-serde = "1.0.229"
-tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 ahash = "0.8.12"
 clap = { version = "4.6.7", features = ["derive"] }
 
-[build-dependencies]
-slint-build = "1.16.1"
+
+# Local internal crates:
+app = { path = "crates/app" }
+defs = { path = "crates/defs" }
+helpers = { path = "crates/helpers" }
+slintui = { path = "crates/slintui" }
+sqlitedb = { path = "crates/sqlitedb" }

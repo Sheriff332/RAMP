@@ -1,0 +1,32 @@
+[package]
+name = "RAMP"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+diesel = { workspace = true }
+# build libsqlite3 as part of the build process
+# uncomment this line if you run into setup issues
+# libsqlite3-sys = { workspace = true }
+cpal = { workspace = true }
+symphonia = { workspace = true }
+lofty = { workspace = true }
+dirs = { workspace = true }
+walkdir = { workspace = true }
+chrono = { workspace = true }
+toml_edit = { workspace = true }
+ahash = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+slint = { workspace = true }
+slint-interpreter = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+defs = { workspace = true }
+slintui = { workspace = true }
+sqlitedb = { workspace = true }
+
+
+
