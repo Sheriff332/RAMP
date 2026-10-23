@@ -1,3 +1,5 @@
 /target
 .cargo/config.toml
 /ramp.sqlite
+.idea/
+*.iml
