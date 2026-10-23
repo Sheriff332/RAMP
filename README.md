@@ -1,8 +1,6 @@
 ## RAMP Ain't Music Player
 
-##### or, Rusty Audio Management Platform
-
-###### or, whatever you want to call it :V
+##### alt. Rusty Audio Management Platform
 
 > [!NOTE]
 > RAMP is currently in an unusable indev state and thus does not serve to any purpose. More details about the project
