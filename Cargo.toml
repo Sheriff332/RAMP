@@ -4,8 +4,8 @@ members = [
     "crates/defs",
     "crates/features/*",
     "crates/helpers",
-    "crates/slintui",
-    "crates/sqlitedb",
+    "crates/features/slintui",
+    "crates/features/sqlitedb",
 ]
 resolver = "3"
 
@@ -41,5 +41,5 @@ clap = { version = "4.6.7", features = ["derive"] }
 app = { path = "crates/app" }
 defs = { path = "crates/defs" }
 helpers = { path = "crates/helpers" }
-slintui = { path = "crates/slintui" }
-sqlitedb = { path = "crates/sqlitedb" }
+slintui = { path = "crates/features/slintui" }
+sqlitedb = { path = "crates/features/sqlitedb" }

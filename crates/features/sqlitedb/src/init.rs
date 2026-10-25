@@ -1,6 +1,6 @@
 use crate::env::{
-    AudioId, AudioType, CollectionId, NewAudio, NewAudioSource, NewCollection, NewCollectionAudio,
-    NewCreator, UpdateAudio,
+    SqlAudioId, SqlAudioType, SqlCollectionId, SqlNewAudio, SqlNewAudioSource, SqlNewCollection,
+    SqlNewCollectionAudio, SqlNewCreator, SqlUpdateAudio,
 };
 use crate::schema::audio_creators::dsl as audio_creators;
 use crate::schema::audio_sources::dsl as audio_sources;
@@ -11,6 +11,7 @@ use crate::schema::collections::dsl as collections;
 use crate::schema::creators::dsl as creators;
 use ahash::AHashSet;
 use chrono::{DateTime, NaiveDateTime, Utc};
+use defs::{DBBackend, Feature, impl_feature};
 use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
@@ -82,12 +83,27 @@ CREATE TABLE IF NOT EXISTS env (
 );
 CREATE INDEX IF NOT EXISTS idx_sources_id ON audio_sources(source_identifier);";
 
-pub fn get_connection_pool(url: &str) -> Pool<ConnectionManager<SqliteConnection>> {
-    let manager = ConnectionManager::<SqliteConnection>::new(url);
-    Pool::builder()
-        .test_on_check_out(true)
-        .build(manager)
-        .expect("Could not build connection pool")
+pub struct SqliteDB {
+    enabled: bool,
+    pub pool: Pool<ConnectionManager<SqliteConnection>>,
+}
+impl_feature!(SqliteDB);
+impl SqliteDB {
+    pub fn from(url: &str) -> SqliteDB {
+        SqliteDB {
+            enabled: false,
+            pool: {
+                let manager = ConnectionManager::<SqliteConnection>::new(url);
+                Pool::builder()
+                    .test_on_check_out(true)
+                    .build(manager)
+                    .expect("Could not build connection pool")
+            },
+        }
+    }
+    pub fn get_pool_connection(&self) -> PooledConnection<ConnectionManager<SqliteConnection>> {
+        self.pool.get().expect("Failed to get connection from pool")
+    }
 }
 
 pub const VALID_EXTENSIONS: &[&str] = &[
@@ -118,30 +134,31 @@ macro_rules! populate_type {
                 tracing::trace!(?path, "Found valid audio");
                 sql_populate($conn, path, $audio_type)?;
             }
+            tracing::info!("Scanned {} directories", $type);
         }
     };
 }
-pub fn init_library(
-    mut conn: PooledConnection<ConnectionManager<SqliteConnection>>,
-    conf: &mut DocumentMut,
-) -> Result<(), diesel::result::Error> {
-    diesel::sql_query("PRAGMA journal_mode = WAL;").execute(&mut conn)?;
-    diesel::sql_query("PRAGMA busy_timeout = 5000;").execute(&mut conn)?;
-    conn.batch_execute(CREATE_TABLES)?;
+impl DBBackend for SqliteDB {
+    fn init_library(&self, conf: &mut DocumentMut) -> defs::Result<()> {
+        let mut conn = self.get_pool_connection();
+        diesel::sql_query("PRAGMA journal_mode = WAL;").execute(&mut conn)?;
+        diesel::sql_query("PRAGMA busy_timeout = 5000;").execute(&mut conn)?;
+        conn.batch_execute(CREATE_TABLES)?;
 
-    conn.transaction(|conn| {
-        populate_type!(conf, "music", AudioType::Track, conn);
+        conn.transaction(|conn| {
+            populate_type!(conf, "music", SqlAudioType::Track, conn);
 
-        Ok::<(), diesel::result::Error>(())
-    })?;
+            Ok::<(), diesel::result::Error>(())
+        })?;
 
-    Ok(())
+        Ok(())
+    }
 }
 
 pub fn sql_populate(
     conn: &mut PooledConnection<ConnectionManager<SqliteConnection>>,
     path: &Path,
-    audio_type: AudioType,
+    audio_type: SqlAudioType,
 ) -> Result<(), diesel::result::Error> {
     let path_str = path.to_string_lossy().to_string();
 
@@ -154,7 +171,7 @@ pub fn sql_populate(
     let existing = audio_sources::audio_sources
         .filter(audio_sources::source_identifier.eq(&path_str))
         .select(audio_sources::audio_id)
-        .first::<AudioId>(conn)
+        .first::<SqlAudioId>(conn)
         .optional()?;
 
     if let Some(existing) = existing {
@@ -166,7 +183,7 @@ pub fn sql_populate(
         {
             let meta = fetch_metadata(path).expect("Failed to fetch metadata");
             update(audios::audios)
-                .set(UpdateAudio {
+                .set(SqlUpdateAudio {
                     audio_title: meta.metatitle,
                     audio_type,
                     duration: meta.metaduration,
@@ -196,7 +213,7 @@ pub fn sql_populate(
         } else {
             c_id = Some(
                 insert_into(collections::collections)
-                    .values(NewCollection {
+                    .values(SqlNewCollection {
                         collection_title: album_title.to_string(),
                         collection_type: "album".to_string(),
                         is_user_generated: false,
@@ -211,7 +228,7 @@ pub fn sql_populate(
 
     //Audio
     let t_id = insert_into(audios::audios)
-        .values(NewAudio {
+        .values(SqlNewAudio {
             audio_title: meta.metatitle,
             audio_type,
             duration: meta.metaduration,
@@ -233,7 +250,7 @@ pub fn sql_populate(
             id
         } else {
             insert_into(creators::creators)
-                .values(NewCreator {
+                .values(SqlNewCreator {
                     creator_name: creator,
                 })
                 .returning(creators::creator_id)
@@ -261,9 +278,9 @@ pub fn sql_populate(
         let position = meta.metaaudio_number.unwrap_or(0);
         let subcollection = meta.metasubcollection.unwrap_or(1) as i32;
         insert_into(collection_audios::collection_audios)
-            .values(NewCollectionAudio {
-                collection_id: CollectionId(c_id),
-                audio_id: AudioId(t_id),
+            .values(SqlNewCollectionAudio {
+                collection_id: SqlCollectionId(c_id),
+                audio_id: SqlAudioId(t_id),
                 position,
                 subcollection,
             })
@@ -272,8 +289,8 @@ pub fn sql_populate(
 
     //Source
     insert_into(audio_sources::audio_sources)
-        .values(NewAudioSource {
-            audio_id: AudioId(t_id),
+        .values(SqlNewAudioSource {
+            audio_id: SqlAudioId(t_id),
             source: "local".to_string(),
             source_identifier: path_str,
         })

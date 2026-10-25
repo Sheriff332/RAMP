@@ -1,4 +1,6 @@
 use clap::Parser;
+use defs::DBBackend;
+use sqlitedb::init::SqliteDB;
 use toml_edit::DocumentMut;
 
 pub mod options;
@@ -36,11 +38,9 @@ fn main() {
 
     let span = tracing::info_span!("database");
     let _guard = span.enter();
-    let pool = sqlitedb::innit::get_connection_pool("ramp.sqlite");
-    sqlitedb::innit::init_library(
-        pool.get().expect("Failed to get connection from pool"),
-        &mut conf,
-    )
-    .expect("Failed to initialize library");
+    let rampdb = SqliteDB::from("ramp.sqlite");
+    rampdb
+        .init_library(&mut conf)
+        .expect("Failed to initialize library");
     drop(_guard);
 }
